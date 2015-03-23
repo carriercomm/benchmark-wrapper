@@ -35,7 +35,6 @@ GetOptions(
 );
 
 # Print help thanks to Pod::Usage
-use Pod::Usage;
 pod2usage({-verbose => 2, -utf8 => 1, -noperldoc => 1}) if $opts{man};
 pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1}) if $opts{help};
 
@@ -58,21 +57,53 @@ if (defined $opts{gnuplotfile}) {
 	($plot_fh, $opts{gnuplotfile}) = File::Temp::tempfile();
 }
 
-my $first = (File::Slurp::read_file($source_file))[0];
-chomp $first;
-my @header = split /\t/, $first;
+my @data = File::Slurp::read_file($source_file, chomp => 1);
+my @header = split /\t/, shift(@data);
 
-my @columns = (2 .. 10);
+my @minmax = ();
+foreach my $line (@data) {
+	if (@minmax) {
+		my $i = 0;
+		foreach (split(/\t/, $line)) {
+			if ($_ < $minmax[$i][0]) {
+				$minmax[$i][0] = $_;
+			} elsif ($_ > $minmax[$i][1]) {
+				$minmax[$i][1] = $_;
+			}
+			$i++;
+		}
+	} else {
+		@minmax = map { [$_,$_] } split(/\t/, $line);
+	}
+}
+
+my @columns;
 if ($opts{columns}) {
 	@columns = split /[,:]/, $opts{columns};
+} else {
+	my $pos = 0;
+	foreach (@header[1 .. $#header]) {
+		printf "Col %2d: %-30s  [%7s, %7s]\n", $pos + 1, $_, @{$minmax[$pos+1]};
+		$pos++;
+	}
+	print "Which columns? e.g. 3,4,5  ";
+	my $in = <STDIN>;
+	chomp($in);
+	@columns = split /\s*,\s*/, $in;
 }
-my @named_columns = grep {$_} map { if ($_ > 1) { my $title = $header[$_-1]; "'$source_file' using 1:$_ title '$title' ";}  } @columns;
+my @named_columns = grep {$_}
+	map {
+		if ($_ > 0) {
+			my $title = $header[$_];
+			"'$source_file' using 1:" . ($_+1) ." title '$title' ";
+		}
+	} @columns;
 
 if (not defined $opts{outputfile}) {
 	$opts{outputfile} = $source_file;
 	$opts{outputfile} =~ s/\.[a-z]{2,5}$//;
 	if (@columns == 1) {
-		$opts{outputfile} .= "_" . $header[$columns[0]-1];
+		$opts{outputfile} .= "_" . $header[$columns[0]];
 	}
 	$opts{outputfile} .= ".png";
 }
@@ -114,7 +145,8 @@ bench-graph.pl [options] source.tsv
 
 =item B<-c, --columns>
 
-Columns to graph. List of values from 2 to 10, separated by ",".
+Columns to graph. List of values from 1, separated by ",".
+Column 0 is the absciss.
 
 =item B<-h, --help>
 
@@ -141,17 +173,21 @@ Increase verbosity.
 
 =head1 Examples
 
+Select the columns interactively and produce a "bench1.png" file:
+
+    bench-graph.pl bench1.csv
+
 Produce a "bench1.png" file with the first column as absciss
-and the next five columns of the benchmarkas ordinates.
+and the next five columns of the benchmarks ordinates.
 
-    bench2graph.pl bench1.tsv -c 2,3,4,5,6
+    bench-graph.pl bench1.tsv -c 1,2,3,4,5
 
-Produce a "bench1_errors_host1.png" file with the last column (errors), and a graph title set to "Host1 Errors".
+Produce a "bench1_errors_host1.png" file with the column 10, and a graph title set to "Host1 Errors".
 
-    bench2graph.pl --title="Host1 Errors" bench1.tsv -c 10
+    bench-graph.pl --title="Host1 Errors" bench1.tsv -c 10
 
 Produce a PDF graph.
 
-    bench2graph.pl -o graph.pdf bench.tsv -c 8
+    bench-graph.pl -o graph.pdf bench.tsv -c 8
 
 =cut
