@@ -14,6 +14,7 @@ use Pod::Usage;
 use constant {
 	VERSION => 1,
 };
+my %engines = ( httperf => "Httperf", siege => "Siege" );
 
 # initialize options
 my %opts = (
@@ -21,6 +22,7 @@ my %opts = (
 	debug => 0,
 	steps => 0,
 	varying => "",
+	engine => "",
 );
 
 # Read command-line options
@@ -31,6 +33,7 @@ GetOptions(
 	"verbose|v+",
 	"debug|D+",
 	# specific options
+	"engine|e=s",
 	"steps=i",
 	"varying=s",
 );
@@ -40,7 +43,13 @@ $opts{verbose} += 5 * $opts{debug};
 pod2usage({-verbose => 2, -utf8 => 1, -noperldoc => 1}) if $opts{man};
 pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1}) if $opts{help};
 if ($opts{steps} < 2) {
-	pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1, -message => "--steps is required and must be greater than 1"});
+	pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1,
+			   -message => "--steps is required and must be greater than 1"});
+}
+$opts{engine} = lc($opts{engine});
+if (not exists $engines{$opts{engine}}) {
+	pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1,
+			   -message => "--engine is required and must be " . join('|', keys %engines)});
 }
 
 my @options_fixed = ();
@@ -86,10 +95,11 @@ if ($opts{verbose}) {
 	print STDERR "Varying parameter:\n\t", join(' / ', map { join(" ", @{$_->{parameters}}); } @option_varying), "\n";
 }
 
-my @columns = qw/requests replies connection_rate request_rate reply_rate_min reply_rate_avg reply_rate_max reply_rate_stddev reply_time net_io errors errors_percent/;
+my $engine = "Bench::" . $engines{$opts{engine}};
+my @columns = $engine->get_columns();
 say join("\t", $opts{varying}, @columns); # header
 foreach my $opt (@option_varying) {
-	my $results = Bench::Httperf::benchmark([ @{$opt->{parameters}}, @options_fixed ]);
+	my $results = $engine->benchmark([ @{$opt->{parameters}}, @options_fixed ]);
 	say join("\t", $opt->{value}, @$results{@columns});
 }
 
@@ -123,8 +133,12 @@ sub benchmark_filtered {
 
 package Bench::Httperf;
 
+sub get_columns {
+	return qw/requests replies connection_rate request_rate reply_rate_min reply_rate_avg reply_rate_max reply_rate_stddev reply_time net_io errors errors_percent/;
+}
+
 sub benchmark {
-	my ($options) = @_;
+	my ($self, $options) = @_;
 
 	my $run = Bench::Common::benchmark_filtered("httperf", $options, [qw/num-conns num-calls/]);
 	return parse_output($run);
@@ -187,13 +201,17 @@ bench-range.pl
 
 =head1 SYNOPSIS
 
-bench-range [options] --steps X [[--] I<httperf-options>]
+bench-range [options] --steps X --engine=[httperf|siege] [[--] I<httperf-options>]
 
 =head1 OPTIONS
 
 =head2 BENCHMARK OPTIONS
 
 =over 8
+
+=item B<--engine=>httperf|siege
+
+Name of the benchmark program to run. Required.
 
 =item B<--option=from...to>, B<-o from...to>
 
@@ -203,11 +221,12 @@ The first run will use I<--option=from> and the last one I<--option=to>
 =item B<--steps=>
 
 Number of successive benchmark runs.
-Must be greater than 1!
+Required. Must be greater than 1!
 
 =item B<--varying=Title>
 
 Title of the varying option, for the CSV report.
+The name of the option will be used by default.
 
 =back
 
