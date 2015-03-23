@@ -10,6 +10,7 @@ use Encode::Locale qw(decode_argv);
 
 use Getopt::Long qw(:config bundling pass_through);
 use Pod::Usage;
+use IPC::Open3;
 
 use constant {
 	VERSION => 1,
@@ -83,6 +84,7 @@ foreach (@ARGV) {
 		if ($option_name and not $opts{varying}) {
 			$opts{varying} = $option_name;
 			$opts{varying} =~ s/^-+//;
+			$opts{varying} =~ s/=$//;
 		}
 	} else {
 		push @options_fixed, $_;
@@ -118,15 +120,17 @@ sub check_options {
 sub benchmark_filtered {
 	my ($command, $options, $required_options) = @_;
 
-    print STDERR "EXEC: $command", join(" ", map { '"' . $_ . '"' } @$options), "\n" if ($opts{verbose});
+    print STDERR "EXEC: $command ", join(" ", map { '"' . $_ . '"' } @$options), "\n" if ($opts{verbose});
 	if ($required_options and @$required_options) {
 		check_options($options, $required_options);
 	}
 
 	# TODO: try to use IPC::Run on Windows, list form pipes are UNIX specific
-    open (my $run, "-|", ($command, @$options))
+	# Siege outputs info on STDERR so `open ($o, "-|", @cmd)` won't work
+	my $out;
+	IPC::Open3::open3(my $in, $out, $out, ($command, @$options))
 		or die "Cannot execute $command: $!\n";
-	return $run;
+	return $out;
 }
 
 #################################################################
@@ -175,7 +179,7 @@ sub parse_output {
 		if (/^Errors: total (\d+)/) {
 			$results{errors} = $1;
 		}
-		print STDERR $_ if $opts{verbose} > 1;
+		print STDERR "HTTPERF: $_" if $opts{verbose} > 1;
     }
     close ($output);
 	say STDERR "-"x60 if $opts{verbose} > 1;
@@ -185,6 +189,45 @@ sub parse_output {
 		$results{errors_percent} = 100;
     } else {
 		$results{errors_percent} = int(100 * $results{errors} / $results{replies});
+    }
+    return \%results;
+}
+
+#################################################################
+
+package Bench::Siege;
+
+sub get_columns {
+	return qw/Transactions Availability Elapsed_time Data_transferred Response_time Transaction_rate Throughput Concurrency Successful_transactions Failed_transactions Longest_transaction Shortest_transaction Errors_percent/;
+}
+
+sub benchmark {
+	my ($self, $options) = @_;
+
+	my $run = Bench::Common::benchmark_filtered("siege", $options);
+	return parse_output($run);
+}
+
+sub parse_output {
+	my ($output) = @_;
+
+	my %results = ();
+	say STDERR "-"x60 if $opts{verbose} > 1;
+    while (<$output>) {
+		if (m/^([A-Z][a-z ]+):\s+(\d+(?:\.\d+)?)\b/) {
+			my ($k, $v) = ($1, $2);
+			$k =~ y/ /_/;
+			$results{$k} = $v;
+		}
+		print STDERR "SIEGE: $_" if $opts{verbose} > 1;
+    }
+    close ($output);
+	say STDERR "-"x60 if $opts{verbose} > 1;
+
+    if (not exists $results{Successful_transactions} or $results{Successful_transactions} == 0) {
+		$results{Errors_percent} = 100;
+    } else {
+		$results{Errors_percent} = int(100 * $results{Failed_transactions} / ($results{Failed_transactions} + $results{Successful_transactions}));
     }
     return \%results;
 }
@@ -201,7 +244,7 @@ bench-range.pl
 
 =head1 SYNOPSIS
 
-bench-range [options] --steps X --engine=[httperf|siege] [[--] I<httperf-options>]
+bench-range [options] --steps X --engine=[httperf|siege] [[--] I<engine-options>]
 
 =head1 OPTIONS
 
@@ -250,15 +293,20 @@ Increase verbosity.
 
 =head1 EXAMPLES
 
-Send 1000 queries at 100, 200, 300 requests per second,
+Send 1000 queries at 100, 200, 300 requests per second using I<httperf>,
 and store the results in a CSV file:
 
-./bench-range.pl --steps 3 --server=localhost --uri=/ --num-conns=1000 --rate=100...300 > a.csv
+./bench-range.pl --steps 3 --engine=httperf --server=localhost --uri=/ --num-conns=1000 --rate=100...300 > a.csv
 
-Send 1000 queries (2 per connection) at 10 to 100 requests per second in 10 runs,
+Send 1000 queries (2 per connection) at 10 to 100 requests per second in 10 runs using I<httperf>,
 store the results in a CSV file and the detailed logs in a separate file:
 
-./bench-range.pl -vv --steps 10 -- --server=localhost --uri=/ --timeout 5 --hog --num-calls=2 --num-conns=500 --rate=10...100 > a.csv 2> a.log
+./bench-range.pl -vv --steps 10 --engine httperf -- --server=localhost --uri=/ --timeout 5 --hog --num-calls=2 --num-conns=500 --rate=10...100 > a.csv 2> a.log
+
+Send queries for 10 seconds at 10 to 100 concurrency in 10 runs using I<siege>,
+store the results in a CSV file and the detailed logs in a separate file:
+
+./bench-range.pl -vv --steps 10 --engine siege -- --benchmark --time=10S --concurrent=10...100 http://localhost/ > a.csv 2> a.log
 
 =cut
 
