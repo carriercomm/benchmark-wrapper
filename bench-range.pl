@@ -89,35 +89,48 @@ if ($opts{verbose}) {
 my @columns = qw/requests replies connection_rate request_rate reply_rate_min reply_rate_avg reply_rate_max reply_rate_stddev reply_time net_io errors errors_percent/;
 say join("\t", $opts{varying}, @columns); # header
 foreach my $opt (@option_varying) {
-	my $results = benchmark_httperf([ @{$opt->{parameters}}, @options_fixed ]);
+	my $results = Bench::Httperf::benchmark([ @{$opt->{parameters}}, @options_fixed ]);
 	say join("\t", $opt->{value}, @$results{@columns});
 }
 
 
 #################################################################
 
-sub check_httperf_options {
-	my ($options) = @_;
-	my @required = qw/num-conns num-calls/;
+package Bench::Common;
 
-	foreach my $req (@required) {
+sub check_options {
+	my ($options, $required) = @_;
+	foreach my $req (@$required) {
 		die "Missing httperf parameter '$req'\n" unless (grep { m/--$req(\b|=)/ } @$options);
 	}
 }
 
-sub benchmark_httperf {
-	my ($options) = @_;
+sub benchmark_filtered {
+	my ($command, $options, $required_options) = @_;
 
-    print STDERR "EXEC: httperf ", join(" ", map { '"' . $_ . '"' } @$options), "\n" if ($opts{verbose});
-	check_httperf_options($options);
+    print STDERR "EXEC: $command", join(" ", map { '"' . $_ . '"' } @$options), "\n" if ($opts{verbose});
+	if ($required_options and @$required_options) {
+		check_options($options, $required_options);
+	}
 
 	# TODO: try to use IPC::Run on Windows, list form pipes are UNIX specific
-    open (my $run, "-|", ("httperf", @$options))
-		or die "Cannot execute httperf\n";
-	return parse_httperf_output($run);
+    open (my $run, "-|", ($command, @$options))
+		or die "Cannot execute $command: $!\n";
+	return $run;
 }
 
-sub parse_httperf_output {
+#################################################################
+
+package Bench::Httperf;
+
+sub benchmark {
+	my ($options) = @_;
+
+	my $run = Bench::Common::benchmark_filtered("httperf", $options, [qw/num-conns num-calls/]);
+	return parse_output($run);
+}
+
+sub parse_output {
 	my ($output) = @_;
 
 	my %results = ();
