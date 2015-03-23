@@ -287,7 +287,8 @@ Print this man page.
 
 =item B<-v, --verbose>
 
-Increase verbosity.
+Increase verbosity on STDERR. At level one, displays the system commands.
+At level two, displays the raw output of commands.
 
 =back
 
@@ -296,17 +297,17 @@ Increase verbosity.
 Send 1000 queries at 100, 200, 300 requests per second using I<httperf>,
 and store the results in a CSV file:
 
-./bench-range.pl --steps 3 --engine=httperf --server=localhost --uri=/ --num-conns=1000 --rate=100...300 > a.csv
+bench-range.pl --steps 3 --engine=httperf --server=localhost --uri=/ --num-conns=1000 --rate=100...300 > a.csv
 
-Send 1000 queries (2 per connection) at 10 to 100 requests per second in 10 runs using I<httperf>,
+Send 1000 queries (2 per connection) at 10 to 110 requests per second in 11 runs using I<httperf>,
 store the results in a CSV file and the detailed logs in a separate file:
 
-./bench-range.pl -vv --steps 10 --engine httperf -- --server=localhost --uri=/ --timeout 5 --hog --num-calls=2 --num-conns=500 --rate=10...100 > a.csv 2> a.log
+bench-range.pl -vv --steps 11 --engine httperf -- --server=localhost --uri=/ --timeout 5 --hog --num-calls=2 --num-conns=500 --rate=10...110 > a.csv 2> a.log
 
-Send queries for 10 seconds at 10 to 100 concurrency in 10 runs using I<siege>,
-store the results in a CSV file and the detailed logs in a separate file:
+Using I<siege>, send queries in 11 runs of 10 seconds each, with concurrency increasing from 10 to 110.
+Store the results in a CSV file and the detailed logs in a separate file:
 
-./bench-range.pl -vv --steps 10 --engine siege -- --benchmark --time=10S --concurrent=10...100 http://localhost/ > a.csv 2> a.log
+bench-range.pl -vv --steps 11 --engine siege -- --benchmark --time=10S --concurrent=10...110 http://localhost/ > a.csv 2> a.log
 
 =cut
 
