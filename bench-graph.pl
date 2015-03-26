@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use warnings qw(FATAL utf8);    # fatalize encoding glitches
 use open qw( :encoding(UTF-8) :std );
-use Encode::Locale qw(decode_argv);
+#use Encode::Locale qw(decode_argv); # Not installed by default
 
 use Getopt::Long qw(:config bundling);
 use Pod::Usage;
