@@ -62,49 +62,13 @@ if (defined $opts{gnuplotfile}) {
 my @data = File::Slurp::read_file($source_files[0], chomp => 1);
 my @header = split /\t/, shift(@data);
 
-my @minmax = ();
-foreach my $line (@data) {
-	if (@minmax) {
-		my $i = 0;
-		foreach (split(/\t/, $line)) {
-			if ($_ < $minmax[$i][0]) {
-				$minmax[$i][0] = $_;
-			} elsif ($_ > $minmax[$i][1]) {
-				$minmax[$i][1] = $_;
-			}
-			$i++;
-		}
-	} else {
-		@minmax = map { [$_,$_] } split(/\t/, $line);
-	}
-}
-
 my @columns;
 if ($opts{columns}) {
 	@columns = split /[,:]/, $opts{columns};
 } else {
-	my $pos = 0;
-	foreach (@header[1 .. $#header]) {
-		printf "Col %2d: %-30s  [%7s, %7s]\n", $pos + 1, $_, @{$minmax[$pos+1]};
-		$pos++;
-	}
-	print "Which columns? e.g. 3,4,5.  ";
-	my $in = <STDIN>;
-	chomp($in);
-	@columns = split /\s*[, ]\s*/, $in;
+	@columns = ask_columns(\@header, \@data);
 }
-my @named_columns = grep {$_}
-	map {
-		if ($_ > 0) {
-			my $title = $header[$_];
-			sprintf("'%%s' using 1:%d title '%s' ", $_+1, $title);
-		}
-	} @columns;
-my @plots = ();
-foreach my $source_file (@source_files) {
-	my @plot_file = map { sprintf($_, $source_file) }, @named_columns
-	push @plots, "plot " . join(', ', @plot_file) . "\n";
-}
+my @plots = build_plot_commands(\@columns, \@header, \@source_files);
 
 if (not defined $opts{outputfile}) {
 	$opts{outputfile} = $source_files[0];
@@ -126,12 +90,69 @@ say $plot_fh "set grid";
 say $plot_fh "set style data linespoints";
 say $plot_fh "set title '${opts{title}}'" if $opts{title};
 say $plot_fh "set output '${opts{outputfile}}'\n";
-say $plot_fh "plot " . join(', ', @named_columns);
+say $plot_fh "plot " . join(', ', @plots);
 
 system("gnuplot", $opts{gnuplotfile});
 
 
 #################################################################
+
+sub ask_columns {
+	my ($head, $data) = @_;
+	my $minmax = compute_minmax($data);
+	my $pos = 0;
+	my @header = @$head;
+	foreach (@header[1 .. $#header]) {
+		printf "Col %2d: %-30s  [%7s, %7s]\n", $pos + 1, $_, @{$minmax->[$pos+1]};
+		$pos++;
+	}
+	print "Which columns? e.g. 3,4,5.  ";
+	my $in = <STDIN>;
+	chomp($in);
+	my @columns = split /\s*[, ]\s*/, $in;
+	return @columns;
+}
+
+sub build_plot_commands {
+	my ($columns, $header, $files) = @_;
+	my @named_columns = grep {$_}
+		map {
+			if ($_ > 0) {
+				my $title = $header->[$_];
+				sprintf("'%%s' using 1:%d title '%%s%s' ", $_+1, $title);
+			}
+		} @$columns;
+	my @total = ();
+	foreach my $source_file (@$files) {
+		my $prefix = (@$files > 0 ? $source_file . " " : "");
+		$prefix =~ s/\.[a-z]{2,5} $/ /;
+		$prefix =~ s#^.+/##;
+		my @plot_for_file = map { sprintf($_, $source_file, $prefix) } @named_columns;
+		push @total, join(', ', @plot_for_file);
+	}
+	return @total;
+}
+
+sub compute_minmax {
+	my ($data) = @_;
+	my @minmax = ();
+	foreach my $line (@$data) {
+		if (@minmax) {
+			my $i = 0;
+			foreach (split(/\t/, $line)) {
+				if ($_ < $minmax[$i][0]) {
+					$minmax[$i][0] = $_;
+				} elsif ($_ > $minmax[$i][1]) {
+					$minmax[$i][1] = $_;
+				}
+				$i++;
+			}
+		} else {
+			@minmax = map { [$_,$_] } split(/\t/, $line);
+		}
+	}
+	return \@minmax;
+}
 
 
 __END__
