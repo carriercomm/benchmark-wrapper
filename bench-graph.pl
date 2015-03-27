@@ -56,8 +56,7 @@ pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1}) if $opts{help};
 
 my @source_files = grep {/^[^-]/} @ARGV;
 if (not @source_files) {
-	print "Please give a source file name.\n\n";
-	pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1}) if $opts{help};
+	pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1, -message => "Please give a source file name.\n"});
 }
 foreach my $source_file (@source_files) {
 	die "Source file not found or not readable.\n" unless (-f -r $source_file);
