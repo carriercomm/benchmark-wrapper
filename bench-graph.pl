@@ -102,6 +102,7 @@ if ($opts{outputfile} =~ m/\.([a-z]{2,5})$/) {
 say $plot_fh "set key outside below";
 say $plot_fh "set key box";
 say $plot_fh "set grid";
+say $plot_fh "set yrange [0:]";
 say $plot_fh "set style data linespoints";
 say $plot_fh "set title '${opts{title}}'" if $opts{title};
 say $plot_fh "set output '${opts{outputfile}}'\n";
