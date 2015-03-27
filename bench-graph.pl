@@ -35,6 +35,7 @@ use constant {
 # initialize options
 my %opts = (
 	verbose => 0,
+	plot => 1,
 );
 
 # Read command-line options
@@ -66,14 +67,6 @@ if (not defined $opts{title}) {
 	$opts{title} = $source_files[0];
 }
 
-my $plot_fh;
-if (defined $opts{gnuplotfile}) {
-	open $plot_fh, ">", $opts{gnuplotfile}
-		or die "$!\n";
-} else {
-	($plot_fh, $opts{gnuplotfile}) = File::Temp::tempfile();
-}
-
 my @data = File::Slurp::read_file($source_files[0], chomp => 1);
 my @header = split /\t/, shift(@data);
 
@@ -85,13 +78,26 @@ if ($opts{columns}) {
 }
 my @plots = build_plot_commands(\@columns, \@header, \@source_files);
 
-if (not defined $opts{outputfile}) {
+if (defined $opts{outputfile}) {
+	if ($opts{outputfile} =~ /\.(gnu)?plot$/) {
+		$opts{gnuplotfile} = $opts{outputfile};
+		$opts{plot} = 0;
+	}
+} else {
 	$opts{outputfile} = $source_files[0];
 	$opts{outputfile} =~ s/\.[a-z]{2,5}$//;
 	if (@columns == 1) {
 		$opts{outputfile} .= "_" . $header[$columns[0]];
 	}
 	$opts{outputfile} .= ".png";
+}
+
+my $plot_fh;
+if (defined $opts{gnuplotfile}) {
+	open $plot_fh, ">", $opts{gnuplotfile}
+		or die "$!\n";
+} else {
+	($plot_fh, $opts{gnuplotfile}) = File::Temp::tempfile();
 }
 
 if ($opts{outputfile} =~ m/\.([a-z]{2,5})$/) {
@@ -108,7 +114,9 @@ say $plot_fh "set title '${opts{title}}'" if $opts{title};
 say $plot_fh "set output '${opts{outputfile}}'\n";
 say $plot_fh "plot " . join(', ', @plots);
 
-system("gnuplot", $opts{gnuplotfile});
+if ($opts{plot}) {
+	system("gnuplot", $opts{gnuplotfile});
+}
 
 
 #################################################################
@@ -205,6 +213,8 @@ Print this man page.
 =item B<-o, --output-file>
 
 Name of the file where the graph will be written.
+The extension must be a format that Gnuplots admits (png, pdf, ps, etc)
+or ".gnuplot" (in which case the gnuplot command won't be called).
 Defaults to the source file name, with the extension replaced by ".png".
 
 =item B<-t, --title>
