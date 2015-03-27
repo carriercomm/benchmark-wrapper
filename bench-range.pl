@@ -22,6 +22,7 @@ my %opts = (
 	verbose => 0,
 	debug => 0,
 	steps => 0,
+	sleep => 30,
 	varying => "",
 	engine => "",
 );
@@ -36,6 +37,7 @@ GetOptions(
 	# specific options
 	"engine|e=s",
 	"steps=i",
+	"sleep=i",
 	"varying=s",
 );
 $opts{verbose} += 5 * $opts{debug};
@@ -100,7 +102,13 @@ if ($opts{verbose}) {
 my $engine = "Bench::" . $engines{$opts{engine}};
 my @columns = $engine->get_columns();
 say join("\t", $opts{varying}, @columns); # header
+my $start = 1;
 foreach my $opt (@option_varying) {
+	if ($start) {
+		$start = 0;
+	} else {
+		sleep $opts{sleep};
+	}
 	my $results = $engine->benchmark([ @{$opt->{parameters}}, @options_fixed ]);
 	say join("\t", $opt->{value}, @$results{@columns});
 }
@@ -260,6 +268,11 @@ Name of the benchmark program to run. Required.
 
 The first run will use I<--option=from> and the last one I<--option=to>
 (or a slightly inferior value if I<from - to> is not a multiple of I<steps>).
+
+=item B<--sleep=>
+
+Number of seconds to sleep between benchmark runs.
+30 by default.
 
 =item B<--steps=>
 
