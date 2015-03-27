@@ -38,15 +38,17 @@ GetOptions(
 pod2usage({-verbose => 2, -utf8 => 1, -noperldoc => 1}) if $opts{man};
 pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1}) if $opts{help};
 
-my $source_file = shift @ARGV;
-if (not $source_file) {
+my @source_files = grep {/^[^-]/} @ARGV;
+if (not @source_files) {
 	print "Please give a source file name.\n\n";
 	pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1}) if $opts{help};
 }
-die "Source file not found or not readable.\n" unless (-f -r $source_file);
+foreach my $source_file (@source_files) {
+	die "Source file not found or not readable.\n" unless (-f -r $source_file);
+}
 
 if (not defined $opts{title}) {
-	$opts{title} = $source_file;
+	$opts{title} = $source_files[0];
 }
 
 my $plot_fh;
@@ -57,7 +59,7 @@ if (defined $opts{gnuplotfile}) {
 	($plot_fh, $opts{gnuplotfile}) = File::Temp::tempfile();
 }
 
-my @data = File::Slurp::read_file($source_file, chomp => 1);
+my @data = File::Slurp::read_file($source_files[0], chomp => 1);
 my @header = split /\t/, shift(@data);
 
 my @minmax = ();
@@ -86,21 +88,26 @@ if ($opts{columns}) {
 		printf "Col %2d: %-30s  [%7s, %7s]\n", $pos + 1, $_, @{$minmax[$pos+1]};
 		$pos++;
 	}
-	print "Which columns? e.g. 3,4,5  ";
+	print "Which columns? e.g. 3,4,5.  ";
 	my $in = <STDIN>;
 	chomp($in);
-	@columns = split /\s*,\s*/, $in;
+	@columns = split /\s*[, ]\s*/, $in;
 }
 my @named_columns = grep {$_}
 	map {
 		if ($_ > 0) {
 			my $title = $header[$_];
-			"'$source_file' using 1:" . ($_+1) ." title '$title' ";
+			sprintf("'%%s' using 1:%d title '%s' ", $_+1, $title);
 		}
 	} @columns;
+my @plots = ();
+foreach my $source_file (@source_files) {
+	my @plot_file = map { sprintf($_, $source_file) }, @named_columns
+	push @plots, "plot " . join(', ', @plot_file) . "\n";
+}
 
 if (not defined $opts{outputfile}) {
-	$opts{outputfile} = $source_file;
+	$opts{outputfile} = $source_files[0];
 	$opts{outputfile} =~ s/\.[a-z]{2,5}$//;
 	if (@columns == 1) {
 		$opts{outputfile} .= "_" . $header[$columns[0]];
@@ -137,7 +144,9 @@ bench-graph.pl
 
 =head1 SYNOPSIS
 
-bench-graph.pl [options] source.tsv
+bench-graph.pl [options] source.tsv [source2.csv ...]
+
+Produce a graph, using Gnuplot, from the tab-separated data files.
 
 =head1 OPTIONS
 
@@ -182,9 +191,13 @@ and the next five columns of the benchmarks ordinates.
 
     bench-graph.pl bench1.tsv -c 1,2,3,4,5
 
-Produce a "bench1_errors_host1.png" file with the column 10, and a graph title set to "Host1 Errors".
+Produce a "bench1_errors.png" file with the column 10 (supposing the column title is "errors"), and a graph title set to "Host1 Errors".
 
     bench-graph.pl --title="Host1 Errors" bench1.tsv -c 10
+
+Produce a comparison graph in "bench_errors.png" file with the column 10 of each source file.
+
+    bench-graph.pl -o "bench_errors.png" -t "Errors" bench*.csv -c 10
 
 Produce a PDF graph.
 
