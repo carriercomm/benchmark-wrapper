@@ -60,10 +60,6 @@ $opts{verbose} += 5 * $opts{debug};
 # Print help thanks to Pod::Usage
 pod2usage({-verbose => 2, -utf8 => 1, -noperldoc => 1}) if $opts{man};
 pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1}) if $opts{help};
-if ($opts{steps} < 2) {
-	pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1,
-			   -message => "--steps is required and must be greater than 1"});
-}
 $opts{engine} = lc($opts{engine});
 if (not exists $engines{$opts{engine}}) {
 	pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1,
@@ -78,13 +74,21 @@ foreach (@ARGV) {
 	my $option_name = '';
 	my $start;
 	my @s = split /\.\.\./;
-	if (@s == 2 and $s[1] =~ /^\d+$/) {
-		if (/^(--.+?=)(\d+)/ or /^(-[a-zA-Z])(\d+)/) {
+	if (@s == 2 and $s[1] =~ /^\d[\d,]*$/) {
+		if ($s[0] =~ /^(--.+?=)(\d*)$/ or $s[0] =~ /^(-[a-zA-Z])(\d*)$/) {
 			($option_name, $start) = ($1, $2);
-			my $inc = int(($s[1] - $start) / ($opts{steps} - 1));
-			foreach my $step (1 .. $opts{steps}) {
-				push @option_varying, { value => $start, parameters => [$option_name . $start] };
-				$start += $inc;
+			if ($start ne "") {
+				my $inc = int(($s[1] - $start) / ($opts{steps} - 1));
+				foreach my $step (1 .. $opts{steps}) {
+					push @option_varying, { value => $start, parameters => [$option_name . $start] };
+					$start += $inc;
+				}
+			} else {
+				my @list = split /,/, $s[1];
+				foreach my $inter (@list) {
+					push @option_varying, { value => $inter, parameters => [$option_name . $inter] };
+				}
+				$opts{steps} = @list;
 			}
 		} elsif (/^-/) {
 			$option_name = '';
@@ -106,6 +110,10 @@ foreach (@ARGV) {
 	} else {
 		push @options_fixed, $_;
 	}
+}
+if ($opts{steps} < 2) {
+	pod2usage({-verbose => 0, -utf8 => 1, -noperldoc => 1,
+			   -message => "--steps is required and must be greater than 1"});
 }
 if (not @option_varying) {
 	die "Nothing to increase at each step. Missing a parameter that declares a range.\n";
@@ -285,6 +293,10 @@ Name of the benchmark program to run. Required.
 
 The first run will use I<--option=from> and the last one I<--option=to>
 (or a slightly inferior value if I<from - to> is not a multiple of I<steps>).
+
+Instead of fixing the boundaries, this parameter can list the values
+as numbers separated by commas.
+For instance B<-o ...5,8,10,50>.
 
 =item B<--sleep=>
 
