@@ -267,7 +267,9 @@ bench-range.pl
 
 =head1 SYNOPSIS
 
-bench-range [options] --steps X --engine=[httperf|siege] [[--] I<engine-options>]
+bench-range.pl [options] --steps X --engine=[httperf|siege] [[--] I<engine-options>]
+
+Produce a CSV file from a sequence of httperf or siege runs.
 
 =head1 OPTIONS
 
