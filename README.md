@@ -16,3 +16,7 @@ Produce a graph, using Gnuplot, from the tab-separated data files (produced by `
 `bench-graph.pl [options] source.tsv [source2.csv ...]`
 
 See `bench-graph.pl --man` for a complete documentation, including example.
+
+## requirements
+
+    yum -y install perl-File-Slurp
