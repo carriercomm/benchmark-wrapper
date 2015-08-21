@@ -19,4 +19,4 @@ See `bench-graph.pl --man` for a complete documentation, including example.
 
 ## requirements
 
-    yum -y install perl-File-Slurp gnuplot
+    yum -y install perl-File-Slurp gnuplot liberation-fonts liberation-mono-fonts liberation-sans-fonts liberation-serif-fonts
